@@ -1,0 +1,11 @@
+__pycache__/
+.claude/
+*.pyc
+*.pyo
+.env
+config.py
+tmp_order_bids.json
+test_bids*.json
+tmp_run_report.json
+tmp_run_report_summary.txt
+run_reports/
