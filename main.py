@@ -21,7 +21,13 @@ from selenium.webdriver.chrome.service import Service
 from config import (
     API_BASE_URL,
     API_KEY,
+    BROWSER_CONNECT_RETRY_COUNT,
+    BROWSER_CONNECT_RETRY_WAIT,
+    BROWSER_START_RETRY_COUNT,
+    BROWSER_START_RETRY_WAIT,
     BROWSER_STARTUP_WAIT,
+    BROWSER_STOP_RETRY_COUNT,
+    BROWSER_STOP_RETRY_WAIT,
     EXECUTION_REPORT_FILE,
     EXECUTION_REPORT_HISTORY_DIR,
     EXECUTION_REPORT_SUMMARY_FILE,
@@ -41,6 +47,7 @@ if sys.platform == "win32":
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = PROJECT_ROOT / "config.py"
+LAST_BROWSER_ERROR = ""
 
 
 def now_iso():
@@ -467,77 +474,121 @@ def refresh_latest_report_order_source():
 
 def stop_browser_if_running(force=False, title="Closing browser if running"):
     """Stop AdsPower browser instance by user_id."""
+    global LAST_BROWSER_ERROR
     if not force and not FORCE_CLOSE_BROWSER:
         return True
 
     print(f"\n{title}...")
-    try:
-        close_url = f"{API_BASE_URL}/api/v1/browser/stop"
-        params = {"user_id": USER_ID}
-        response = requests.get(close_url, params=params, headers=build_headers(), timeout=10)
-        result = response.json()
+    close_url = f"{API_BASE_URL}/api/v1/browser/stop"
+    params = {"user_id": USER_ID}
 
-        if result.get("code") == 0:
-            print("   OK: browser stopped")
-        else:
-            print(f"   WARN: {result.get('msg', 'unknown response')}")
+    for attempt in range(1, BROWSER_STOP_RETRY_COUNT + 1):
+        try:
+            response = requests.get(
+                close_url,
+                params=params,
+                headers=build_headers(),
+                timeout=10,
+            )
+            result = response.json()
+            msg = result.get("msg", "unknown response")
 
-        time.sleep(2)
-        return True
-    except Exception as exc:
-        print(f"   WARN: failed to stop browser: {str(exc)[:120]}")
-        return False
+            if result.get("code") == 0:
+                LAST_BROWSER_ERROR = ""
+                print("   OK: browser stopped")
+                time.sleep(BROWSER_STOP_RETRY_WAIT)
+                return True
+
+            if "not open" in str(msg).lower():
+                LAST_BROWSER_ERROR = ""
+                print(f"   OK: browser already closed ({msg})")
+                time.sleep(1)
+                return True
+
+            LAST_BROWSER_ERROR = f"stop failed: {msg}"
+            print(f"   WARN: {LAST_BROWSER_ERROR}")
+        except Exception as exc:
+            LAST_BROWSER_ERROR = f"failed to stop browser: {str(exc)[:120]}"
+            print(f"   WARN: {LAST_BROWSER_ERROR}")
+
+        if attempt < BROWSER_STOP_RETRY_COUNT:
+            print(f"   Retry stop in {BROWSER_STOP_RETRY_WAIT}s ({attempt}/{BROWSER_STOP_RETRY_COUNT})")
+            time.sleep(BROWSER_STOP_RETRY_WAIT)
+
+    return False
 
 
 def start_browser():
+    global LAST_BROWSER_ERROR
     print("\nStarting browser...")
-    try:
-        start_url = f"{API_BASE_URL}/api/v1/browser/start"
-        params = {
-            "user_id": USER_ID,
-            "open_tabs": 0,
-            "ip_tab": 0,
-            "headless": 0,
-        }
+    start_url = f"{API_BASE_URL}/api/v1/browser/start"
+    params = {
+        "user_id": USER_ID,
+        "open_tabs": 0,
+        "ip_tab": 0,
+        "headless": 0,
+    }
 
-        response = requests.get(start_url, params=params, headers=build_headers(), timeout=30)
-        result = response.json()
+    for attempt in range(1, BROWSER_START_RETRY_COUNT + 1):
+        try:
+            response = requests.get(
+                start_url,
+                params=params,
+                headers=build_headers(),
+                timeout=30,
+            )
+            result = response.json()
 
-        if result.get("code") != 0:
-            print(f"   ERROR: start failed: {result.get('msg', 'unknown error')}")
-            return None
+            if result.get("code") != 0:
+                LAST_BROWSER_ERROR = f"start failed: {result.get('msg', 'unknown error')}"
+                print(f"   ERROR: {LAST_BROWSER_ERROR}")
+            else:
+                data = result["data"]
+                selenium_address = data["ws"]["selenium"]
+                webdriver_path = data["webdriver"]
 
-        data = result["data"]
-        selenium_address = data["ws"]["selenium"]
-        webdriver_path = data["webdriver"]
+                LAST_BROWSER_ERROR = ""
+                print("   OK: browser started")
+                print(f"   - Debug port: {data.get('debug_port')}")
+                return selenium_address, webdriver_path
+        except Exception as exc:
+            LAST_BROWSER_ERROR = f"start exception: {str(exc)[:120]}"
+            print(f"   ERROR: {LAST_BROWSER_ERROR}")
 
-        print("   OK: browser started")
-        print(f"   - Debug port: {data.get('debug_port')}")
+        if attempt < BROWSER_START_RETRY_COUNT:
+            print(f"   Retry start in {BROWSER_START_RETRY_WAIT}s ({attempt}/{BROWSER_START_RETRY_COUNT})")
+            time.sleep(BROWSER_START_RETRY_WAIT)
 
-        return selenium_address, webdriver_path
-    except Exception as exc:
-        print(f"   ERROR: start exception: {exc}")
-        return None
+    return None
 
 
 def connect_to_browser(selenium_address, webdriver_path):
+    global LAST_BROWSER_ERROR
     print("\nWaiting browser startup...")
     time.sleep(BROWSER_STARTUP_WAIT)
 
     print("Connecting to browser...")
-    try:
-        chrome_options = Options()
-        chrome_options.add_experimental_option("debuggerAddress", selenium_address)
-        service = Service(executable_path=webdriver_path)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+    for attempt in range(1, BROWSER_CONNECT_RETRY_COUNT + 1):
+        try:
+            chrome_options = Options()
+            chrome_options.add_experimental_option("debuggerAddress", selenium_address)
+            service = Service(executable_path=webdriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
 
-        initial_tabs = len(driver.window_handles)
-        print("   OK: connected")
-        print(f"   - Initial tabs: {initial_tabs}")
-        return driver, initial_tabs
-    except Exception as exc:
-        print(f"   ERROR: connect failed: {exc}")
-        return None, 0
+            initial_tabs = len(driver.window_handles)
+            LAST_BROWSER_ERROR = ""
+            print("   OK: connected")
+            print(f"   - Initial tabs: {initial_tabs}")
+            return driver, initial_tabs
+        except Exception as exc:
+            LAST_BROWSER_ERROR = f"connect failed: {str(exc)[:120]}"
+            print(f"   ERROR: {LAST_BROWSER_ERROR}")
+
+        if attempt < BROWSER_CONNECT_RETRY_COUNT:
+            print(f"   Retry connect in {BROWSER_CONNECT_RETRY_WAIT}s ({attempt}/{BROWSER_CONNECT_RETRY_COUNT})")
+            time.sleep(BROWSER_CONNECT_RETRY_WAIT)
+
+    return None, 0
 
 
 def clean_old_tabs(driver):
@@ -674,14 +725,21 @@ def main():
         print("-" * 60)
 
         if idx == 1:
-            stop_browser_if_running(force=False, title="Pre-run cleanup")
+            cleanup_ok = stop_browser_if_running(force=False, title="Pre-run cleanup")
         else:
-            stop_browser_if_running(force=True, title="Closing previous browser window")
+            cleanup_ok = stop_browser_if_running(force=True, title="Closing previous browser window")
+
+        if not cleanup_ok:
+            all_success = False
+            batch_report["error"] = LAST_BROWSER_ERROR or "browser stop failed before start"
+            batch_report["completed_at"] = now_iso()
+            report["batches"].append(batch_report)
+            continue
 
         browser_info = start_browser()
         if not browser_info:
             all_success = False
-            batch_report["error"] = "browser start failed"
+            batch_report["error"] = LAST_BROWSER_ERROR or "browser start failed"
             batch_report["completed_at"] = now_iso()
             report["batches"].append(batch_report)
             continue
@@ -691,7 +749,7 @@ def main():
         if not driver:
             all_success = False
             batch_report["initial_tabs"] = initial_tabs
-            batch_report["error"] = "webdriver connect failed"
+            batch_report["error"] = LAST_BROWSER_ERROR or "webdriver connect failed"
             batch_report["completed_at"] = now_iso()
             report["batches"].append(batch_report)
             continue
