@@ -1,7 +1,5 @@
 # AdsPower + PartnerBoost 批量开链接工具
 
-python generate_urls.py --date 2026-04-25 --run-main
-
 ## 项目介绍
 
 这个项目用于把 PartnerBoost 订单转成推广链接，并通过 AdsPower 指纹浏览器批量打开。
@@ -21,17 +19,31 @@ python generate_urls.py --date 2026-04-25 --run-main
 pip install -r requirements.txt
 ```
 
-编辑 `config.py`，确认这些配置：
+首次使用时复制配置模板：
 
 ```bash
 copy config.example.py config.py
+copy .env.example .env
 ```
 
+把账号和 token 填到 `.env`：
+
+```text
+ADSPOWER_API_BASE_URL=http://localhost:50325
+ADSPOWER_USER_ID=your_adspower_user_id
+ADSPOWER_API_KEY=your_adspower_api_key
+
+PB_API_BASE_URL=https://app.partnerboost.com
+PB_TOKEN=your_partnerboost_token
+PB_LINK_UID=
+```
+
+`config.py` 只保留业务配置，例如：
+
 ```python
-USER_ID = "your_adspower_user_id"
-API_KEY = "your_adspower_api_key"
-PB_TOKEN = "your_partnerboost_token"
-TAB_COUNT_PER_URL = 20
+TAB_COUNT_PER_URL = 10
+WAIT_TIME_BETWEEN_TABS = 1
+TARGET_URLS = []
 ```
 
 ### 自动操作
@@ -39,12 +51,12 @@ TAB_COUNT_PER_URL = 20
 推荐用一条命令跑完整流程：
 
 ```bash
-python generate_urls.py --date 2026-04-26 --run-main
+python generate_urls.py --date 2026-04-25 --run-main
 ```
 
 这条命令会自动完成：
 
-1. 获取 `2026-04-26` 的 PartnerBoost 订单。
+1. 获取指定日期的 PartnerBoost 订单。
 2. 根据每笔订单的 `bid/brand_id` 查询推广链接。
 3. 更新 `tmp_order_bids.json`，方便查看订单和链接结果。
 4. 自动写入 `config.py` 的 `TARGET_URLS`。
@@ -54,50 +66,25 @@ python generate_urls.py --date 2026-04-26 --run-main
 如果只想检查某天订单 bid，不查询链接、不修改 `config.py`：
 
 ```bash
-python generate_urls.py --date 2026-04-26 --bids-only
+python generate_urls.py --date 2026-04-25 --bids-only
 ```
 
 如果只想生成链接并写入 `config.py`，但不运行 `main.py`：
 
 ```bash
-python generate_urls.py --date 2026-04-26 --yes
+python generate_urls.py --date 2026-04-25 --yes
 ```
 
 执行结果文件：
 
 ```text
 tmp_order_bids.json
-tmp_run_report.json
 tmp_run_report_summary.txt
+tmp_run_report.json
 run_reports/
 ```
 
-`tmp_order_bids.json` 用于查看订单和链接结果。正常查到链接时：
-
-```json
-{
-  "bid": "136533",
-  "merchant_name": "VEVOR",
-  "order_id": "C291M-xxxx",
-  "link_status": "resolved",
-  "link": "https://pboost.me/EKMSwYk",
-  "link_error": ""
-}
-```
-
-如果某个 bid 不支持生成链接：
-
-```json
-{
-  "link_status": "failed",
-  "link": "",
-  "link_error": "Bid does not support brand link tracking."
-}
-```
-
-`tmp_run_report_summary.txt` 是最近一次执行的中文摘要，优先看这个文件。
-
-`tmp_run_report.json` 是最近一次 `main.py` 的详细 JSON 报告，`run_reports/` 会保存历史报告。
+优先查看 `tmp_run_report_summary.txt`，这是最近一次执行的中文摘要。
 
 ### 手动操作
 

@@ -1,23 +1,30 @@
 """
 Example configuration for AdsPower multi-tab opener.
-Copy this file to config.py and fill in your local credentials.
+Copy this file to config.py. Credentials are read from .env.
 """
 
+import os
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 # ==================== AdsPower API ====================
-API_BASE_URL = "http://localhost:50325"
-USER_ID = "your_adspower_user_id"
-API_KEY = ""
+API_BASE_URL = os.getenv("ADSPOWER_API_BASE_URL", "http://localhost:50325")
+USER_ID = os.getenv("ADSPOWER_USER_ID", "")
+API_KEY = os.getenv("ADSPOWER_API_KEY", "")
 
 # ==================== PartnerBoost API ====================
-PB_API_BASE_URL = "https://app.partnerboost.com"
-PB_TOKEN = ""
+PB_API_BASE_URL = os.getenv("PB_API_BASE_URL", "https://app.partnerboost.com")
+PB_TOKEN = os.getenv("PB_TOKEN", "")
 
 # Transaction API settings. Status "All" keeps every order status.
 PB_TRANSACTION_STATUS = "All"
 PB_TRANSACTION_PAGE_LIMIT = 2000
 
 # Storefront link API settings. Keep uid empty if you do not need it.
-PB_LINK_UID = ""
+PB_LINK_UID = os.getenv("PB_LINK_UID", "")
 
 # Local brand_id -> storefront link cache.
 PB_BRAND_LINK_CACHE_FILE = "brand_links.json"
