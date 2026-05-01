@@ -31,6 +31,7 @@ copy .env.example .env
 ```text
 ADSPOWER_API_BASE_URL=http://localhost:50325
 ADSPOWER_USER_ID=your_adspower_user_id
+ADSPOWER_USER_IDS=env_id_1,env_id_2,env_id_3
 ADSPOWER_API_KEY=your_adspower_api_key
 
 PB_API_BASE_URL=https://app.partnerboost.com
@@ -45,6 +46,8 @@ TAB_COUNT_PER_URL = 10
 WAIT_TIME_BETWEEN_TABS = 1
 TARGET_URLS = []
 ```
+
+如果只使用一个 AdsPower 环境，可以只填 `ADSPOWER_USER_ID`。如果要并行使用多个环境，填写 `ADSPOWER_USER_IDS`，多个环境 ID 用英文逗号分隔。脚本会把订单链接按轮询方式平均分配到多个环境，例如 10 个链接、3 个环境会分成 4/3/3。
 
 ### 自动操作
 
@@ -81,10 +84,13 @@ python generate_urls.py --date 2026-04-25 --yes
 tmp_order_bids.json
 tmp_run_report_summary.txt
 tmp_run_report.json
+tmp_run_console.log
 run_reports/
 ```
 
 优先查看 `tmp_run_report_summary.txt`，这是最近一次执行的中文摘要。
+
+`tmp_run_console.log` 会保存最近一次运行时终端里输出的完整日志。
 
 ### 手动操作
 

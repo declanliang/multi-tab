@@ -8,4 +8,5 @@ tmp_order_bids.json
 test_bids*.json
 tmp_run_report.json
 tmp_run_report_summary.txt
+tmp_run_console.log
 run_reports/

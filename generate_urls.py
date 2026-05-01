@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +26,7 @@ try:
     from config import (
         PB_API_BASE_URL,
         PB_BRAND_LINK_CACHE_FILE,
+        EXECUTION_LOG_FILE,
         PB_LINK_UID,
         PB_ORDER_BIDS_OUTPUT_FILE,
         PB_TOKEN,
@@ -36,6 +39,36 @@ except ImportError as exc:
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = PROJECT_ROOT / "config.py"
+PRINT_LOCK = threading.Lock()
+LOG_FILE_HANDLE = None
+
+
+class TeeStream:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        with PRINT_LOCK:
+            for stream in self.streams:
+                stream.write(data)
+                stream.flush()
+        return len(data)
+
+    def flush(self):
+        with PRINT_LOCK:
+            for stream in self.streams:
+                stream.flush()
+
+
+def setup_console_log():
+    global LOG_FILE_HANDLE
+    if LOG_FILE_HANDLE:
+        return
+    log_path = output_path(EXECUTION_LOG_FILE)
+    LOG_FILE_HANDLE = log_path.open("w", encoding="utf-8")
+    sys.stdout = TeeStream(sys.stdout, LOG_FILE_HANDLE)
+    sys.stderr = TeeStream(sys.stderr, LOG_FILE_HANDLE)
+    print(f"Console log written to: {log_path}")
 
 
 @dataclass
@@ -499,15 +532,19 @@ def confirm_write(args: argparse.Namespace) -> bool:
 
 def run_main_script() -> None:
     print("\nRunning AdsPower opener: python main.py")
+    env = os.environ.copy()
+    env["EXECUTION_LOG_APPEND"] = "1"
     result = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / "main.py")],
         cwd=PROJECT_ROOT,
+        env=env,
     )
     if result.returncode != 0:
         raise SystemExit(f"main.py failed with exit code {result.returncode}.")
 
 
 def main() -> None:
+    setup_console_log()
     args = parse_args()
 
     if args.refresh_local_links:

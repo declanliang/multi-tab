@@ -14,6 +14,11 @@ load_dotenv()
 API_BASE_URL = os.getenv("ADSPOWER_API_BASE_URL", "http://localhost:50325")
 USER_ID = os.getenv("ADSPOWER_USER_ID", "")
 API_KEY = os.getenv("ADSPOWER_API_KEY", "")
+USER_IDS = [
+    value.strip()
+    for value in os.getenv("ADSPOWER_USER_IDS", USER_ID).split(",")
+    if value.strip()
+]
 
 # ==================== PartnerBoost API ====================
 PB_API_BASE_URL = os.getenv("PB_API_BASE_URL", "https://app.partnerboost.com")
@@ -36,6 +41,7 @@ PB_ORDER_BIDS_OUTPUT_FILE = "tmp_order_bids.json"
 EXECUTION_REPORT_FILE = "tmp_run_report.json"
 EXECUTION_REPORT_SUMMARY_FILE = "tmp_run_report_summary.txt"
 EXECUTION_REPORT_HISTORY_DIR = "run_reports"
+EXECUTION_LOG_FILE = "tmp_run_console.log"
 
 # ==================== Task Settings ====================
 # Manual URLs, or URLs written by generate_urls.py after your confirmation.
